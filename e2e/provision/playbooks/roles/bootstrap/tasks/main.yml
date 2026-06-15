@@ -25,6 +25,10 @@
   ansible.builtin.include_tasks: create-mgmt.yml
   when: kind.enabled
 
+- name: Preload catalog-pinned images into kind
+  ansible.builtin.include_tasks: /tmp/nephio-kind-image-preload.yml
+  when: kind.enabled
+
 - name: Apply kpt packages
   ansible.builtin.include_tasks:
     file: apply-pkgs.yml

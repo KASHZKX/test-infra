@@ -72,6 +72,7 @@ REPO=${NEPHIO_REPO:-$(get_metadata nephio-test-infra-repo "https://github.com/ne
 BRANCH=${NEPHIO_BRANCH:-$(get_metadata nephio-test-infra-branch "main")}
 NEPHIO_USER=${NEPHIO_USER:-$(get_metadata nephio-user "${USER:-ubuntu}")}
 NEPHIO_CATALOG_REPO_URI=${NEPHIO_CATALOG_REPO_URI:-$(get_metadata nephio-catalog-repo-uri "https://github.com/nephio-project/catalog.git")}
+NEPHIO_PORCH_IMAGE_TAG=${NEPHIO_PORCH_IMAGE_TAG:-v1.5.9}
 K8S_CONTEXT=${K8S_CONTEXT:-"kind-kind"}
 K8S_VERSION=${K8S_VERSION:-"v1.32.0"}
 HOME=${NEPHIO_HOME:-/home/$NEPHIO_USER}
@@ -172,6 +173,101 @@ chown "$NEPHIO_USER:$NEPHIO_USER" "$HOME/.bash_aliases"
 # Sandbox Creation
 int_start=$(date +%s)
 cd "$REPO_DIR/e2e/provision"
+
+# === [Kind image preload: keep catalog-pinned image names available] ===
+cat << 'EOF' > /tmp/nephio-kind-image-preload.yml
+---
+- name: Define image replacements for unsupported pinned tags
+  ansible.builtin.set_fact:
+    nephio_image_mappings:
+      - source: bitnami/kube-rbac-proxy:latest
+        target: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+      - source: docker.io/bitnami/memcached:latest
+        target: docker.io/bitnami/memcached:1.6.19-debian-11-r7
+      - source: docker.io/bitnami/postgresql:latest
+        target: docker.io/bitnami/postgresql:15.2.0-debian-11-r26
+      - source: docker.io/bitnami/mongodb:latest
+        target: docker.io/bitnami/mongodb:4.4.4-debian-10-r0
+      - source: bitnami/kubectl:latest
+        target: bitnami/kubectl:1.32.0
+      - source: docker.io/nephio/porch-function-runner:__NEPHIO_PORCH_IMAGE_TAG__
+        target: docker.io/nephio/porch-function-runner:latest
+      - source: docker.io/nephio/porch-wrapper-server:__NEPHIO_PORCH_IMAGE_TAG__
+        target: docker.io/nephio/porch-wrapper-server:latest
+      - source: docker.io/nephio/porch-server:__NEPHIO_PORCH_IMAGE_TAG__
+        target: docker.io/nephio/porch-server:latest
+      - source: docker.io/nephio/porch-controllers:__NEPHIO_PORCH_IMAGE_TAG__
+        target: docker.io/nephio/porch-controllers:latest
+
+- name: Pull replacement images
+  become: true
+  ansible.builtin.command: "docker pull {{ item.source }}"
+  loop: "{{ nephio_image_mappings }}"
+  register: nephio_image_pull
+  until: nephio_image_pull is not failed
+  retries: 3
+  delay: 10
+  changed_when: false
+
+- name: Tag replacement images with catalog-pinned names
+  become: true
+  ansible.builtin.command: "docker tag {{ item.source }} {{ item.target }}"
+  loop: "{{ nephio_image_mappings }}"
+  changed_when: false
+
+- name: Import catalog-pinned images into kind containerd
+  become: true
+  ansible.builtin.shell: "docker save {{ item.target }} | docker exec -i kind-control-plane ctr -n k8s.io images import -"
+  loop: "{{ nephio_image_mappings }}"
+  changed_when: false
+
+- name: Verify catalog-pinned images are present in kind containerd
+  become: true
+  ansible.builtin.shell: "docker exec kind-control-plane ctr -n k8s.io images ls | grep -F -- {{ item.target }}"
+  loop: "{{ nephio_image_mappings }}"
+  changed_when: false
+EOF
+sed -i "s/__NEPHIO_PORCH_IMAGE_TAG__/$NEPHIO_PORCH_IMAGE_TAG/g" /tmp/nephio-kind-image-preload.yml
+
+BOOTSTRAP_TASKS="playbooks/roles/bootstrap/tasks/main.yml"
+if ! grep -q "Preload catalog-pinned images into kind" "$BOOTSTRAP_TASKS"; then
+    tmpfile="$(mktemp)"
+    awk '
+        /- name: Apply kpt packages/ && ! inserted {
+            print "- name: Preload catalog-pinned images into kind"
+            print "  ansible.builtin.include_tasks: /tmp/nephio-kind-image-preload.yml"
+            print "  when: kind.enabled"
+            print ""
+            inserted = 1
+        }
+        { print }
+    ' "$BOOTSTRAP_TASKS" > "$tmpfile"
+    mv "$tmpfile" "$BOOTSTRAP_TASKS"
+    chown "$NEPHIO_USER:$NEPHIO_USER" "$BOOTSTRAP_TASKS"
+    chmod 644 "$BOOTSTRAP_TASKS"
+fi
+
+KPT_TASKS="playbooks/roles/kpt/tasks/main.yml"
+if grep -q "Rewrite stale catalog image references" "$KPT_TASKS"; then
+    tmpfile="$(mktemp)"
+    awk '
+        /- name: "Rewrite stale catalog image references: {{ pkg }}"/ {
+            skip = 3
+            next
+        }
+        skip > 0 {
+            skip--
+            next
+        }
+        { print }
+    ' "$KPT_TASKS" > "$tmpfile"
+    mv "$tmpfile" "$KPT_TASKS"
+    chown "$NEPHIO_USER:$NEPHIO_USER" "$KPT_TASKS"
+    chmod 644 "$KPT_TASKS"
+fi
+
+# === [Kind image preload end] ===
+
 export DEBUG DOCKERHUB_USERNAME DOCKERHUB_TOKEN FAIL_FAST MGMT_CLUSTER_TYPE K8S_VERSION
 runuser -u "$NEPHIO_USER" ./install_sandbox.sh
 printf "%s secs\n" "$(($(date +%s) - int_start))"
