@@ -52,6 +52,30 @@
     group: "{{ ansible_user_gid }}"
     recurse: true
 
+- name: Read Gitea StatefulSet package manifest
+  ansible.builtin.slurp:
+    src: "{{ workdir }}/statefulset-gitea.yaml"
+  register: gitea_statefulset_manifest
+  when: pkg == 'distros/sandbox/gitea'
+
+- name: Configure Gitea package DNS lookup behavior
+  ansible.builtin.copy:
+    dest: "{{ workdir }}/statefulset-gitea.yaml"
+    owner: "{{ ansible_user_uid }}"
+    group: "{{ ansible_user_gid }}"
+    mode: '0644'
+    content: "{{ (gitea_statefulset_manifest.content | b64decode | from_yaml | combine(gitea_dns_config_patch, recursive=True)) | to_nice_yaml(indent=2, sort_keys=false) }}"
+  vars:
+    gitea_dns_config_patch:
+      spec:
+        template:
+          spec:
+            dnsConfig:
+              options:
+                - name: ndots
+                  value: "1"
+  when: pkg == 'distros/sandbox/gitea'
+
 - name: "Get package differences between local and upstream: {{ pkg }}"
   kpt:
     pkg_path: "{{ workdir }}"

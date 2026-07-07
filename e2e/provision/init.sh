@@ -184,10 +184,16 @@ cat << 'EOF' > /tmp/nephio-kind-image-preload.yml
         target: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
       - source: docker.io/bitnami/memcached:latest
         target: docker.io/bitnami/memcached:1.6.19-debian-11-r7
+      - source: docker.io/bitnami/memcached:latest
+        target: docker.io/bitnamilegacy/memcached:1.6.19-debian-11-r7
       - source: docker.io/bitnami/postgresql:latest
         target: docker.io/bitnami/postgresql:15.2.0-debian-11-r26
+      - source: docker.io/bitnami/postgresql:latest
+        target: docker.io/bitnamilegacy/postgresql:15.2.0-debian-11-r26
       - source: docker.io/bitnami/mongodb:latest
         target: docker.io/bitnami/mongodb:4.4.4-debian-10-r0
+      - source: docker.io/bitnami/mongodb:latest
+        target: docker.io/bitnamilegacy/mongodb:4.4.4-debian-10-r0
       - source: bitnami/kubectl:latest
         target: bitnami/kubectl:1.32.0
       - source: docker.io/nephio/porch-function-runner:__NEPHIO_PORCH_IMAGE_TAG__

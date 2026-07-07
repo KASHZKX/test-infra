@@ -36,3 +36,33 @@
   loop: "{{ deployment_list.resources }}"
   loop_control:
     loop_var: resource
+
+- name: "Get statefulset resources in namespace {{ namespace }}"
+  kubernetes.core.k8s_info:
+    context: "{{ context }}"
+    api_version: apps/v1
+    kind: StatefulSet
+    namespace: "{{ namespace }}"
+  register: statefulset_list
+
+- name: "Print statefulset resources in namespace {{ namespace }}"
+  ansible.builtin.debug:
+    var: statefulset_list.resources
+
+- name: "Wait for statefulsets in namespace {{ namespace }}"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ context }}"
+      - rollout
+      - status
+      - statefulset
+      - -n
+      - "{{ namespace }}"
+      - "{{ resource.metadata.name }}"
+      - --timeout=300s
+  changed_when: false
+  loop: "{{ statefulset_list.resources }}"
+  loop_control:
+    loop_var: resource
