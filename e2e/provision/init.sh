@@ -69,10 +69,11 @@ export DEBUG=${NEPHIO_DEBUG:-$(get_metadata nephio-setup-debug "false")}
 
 RUN_E2E=${NEPHIO_RUN_E2E:-$(get_metadata nephio-run-e2e "false")}
 REPO=${NEPHIO_REPO:-$(get_metadata nephio-test-infra-repo "https://github.com/nephio-project/test-infra.git")}
-BRANCH=${NEPHIO_BRANCH:-$(get_metadata nephio-test-infra-branch "main")}
+BRANCH=${NEPHIO_BRANCH:-$(get_metadata nephio-test-infra-branch "v5.0.0")}
 NEPHIO_USER=${NEPHIO_USER:-$(get_metadata nephio-user "${USER:-ubuntu}")}
 NEPHIO_CATALOG_REPO_URI=${NEPHIO_CATALOG_REPO_URI:-$(get_metadata nephio-catalog-repo-uri "https://github.com/nephio-project/catalog.git")}
-NEPHIO_PORCH_IMAGE_TAG=${NEPHIO_PORCH_IMAGE_TAG:-v1.5.9}
+NEPHIO_PORCH_IMAGE_TAG=${NEPHIO_PORCH_IMAGE_TAG:-v1.4.0}
+NEPHIO_CATALOG_VERSION=c36ae6143fd80ff21eaae15f7e422b86b20a73e1
 K8S_CONTEXT=${K8S_CONTEXT:-"kind-kind"}
 K8S_VERSION=${K8S_VERSION:-"v1.32.0"}
 HOME=${NEPHIO_HOME:-/home/$NEPHIO_USER}
@@ -86,7 +87,7 @@ MGMT_CLUSTER_TYPE=${MGMT_CLUSTER_TYPE:-$(get_metadata mgmt_cluster_type "kind")}
 if [ ${MGMT_CLUSTER_TYPE} == "kubeadm" ]; then
     K8S_CONTEXT="kubernetes-admin@kubernetes"
 fi
-export ANSIBLE_CMD_EXTRA_VAR_LIST='{ "nephio_catalog_repo_uri": "'${NEPHIO_CATALOG_REPO_URI}'", "k8s": { "context" : "'${K8S_CONTEXT}'", "version" : "'$K8S_VERSION'" } }'
+export ANSIBLE_CMD_EXTRA_VAR_LIST='{ "nephio_catalog_version": "'${NEPHIO_CATALOG_VERSION}'", "nephio_porch_image_tag": "'${NEPHIO_PORCH_IMAGE_TAG}'", "nephio_catalog_repo_uri": "'${NEPHIO_CATALOG_REPO_URI}'", "k8s": { "context" : "'${K8S_CONTEXT}'", "version" : "'$K8S_VERSION'" } }'
 
 if [ ${K8S_CONTEXT} == "kind-kind" ]; then
     export ANSIBLE_TAG=all
@@ -165,6 +166,15 @@ if [ ! -d "$REPO_DIR" ]; then
         popd >/dev/null
     fi
 fi
+# This installer is maintained on top of the official v5.0.0 test-infra commit.
+# Preserve local fixes, but reject an unrelated checkout instead of ignoring BRANCH.
+if [[ "$BRANCH" != "v5.0.0" ]] || ! git -C "$REPO_DIR" merge-base --is-ancestor \
+    08beebe62fc0eb7024ea833df90ba5aff5826039 HEAD; then
+    echo "This installer requires a checkout based on test-infra v5.0.0." >&2
+    exit 1
+fi
+printf 'Installer commit: %s; catalog: %s; Porch: %s\n' \
+    "$(git -C "$REPO_DIR" rev-parse HEAD)" "$NEPHIO_CATALOG_VERSION" "$NEPHIO_PORCH_IMAGE_TAG"
 find "$REPO_DIR" -name '*.sh' -exec chmod +x {} \;
 
 cp "$REPO_DIR/e2e/provision/bash_config.sh" "$HOME/.bash_aliases"
@@ -191,13 +201,11 @@ cat << 'EOF' > /tmp/nephio-kind-image-preload.yml
       - source: bitnami/kubectl:latest
         target: bitnami/kubectl:1.32.0
       - source: docker.io/nephio/porch-function-runner:__NEPHIO_PORCH_IMAGE_TAG__
-        target: docker.io/nephio/porch-function-runner:latest
-      - source: docker.io/nephio/porch-wrapper-server:__NEPHIO_PORCH_IMAGE_TAG__
-        target: docker.io/nephio/porch-wrapper-server:latest
+        target: docker.io/nephio/porch-function-runner:__NEPHIO_PORCH_IMAGE_TAG__
       - source: docker.io/nephio/porch-server:__NEPHIO_PORCH_IMAGE_TAG__
-        target: docker.io/nephio/porch-server:latest
+        target: docker.io/nephio/porch-server:__NEPHIO_PORCH_IMAGE_TAG__
       - source: docker.io/nephio/porch-controllers:__NEPHIO_PORCH_IMAGE_TAG__
-        target: docker.io/nephio/porch-controllers:latest
+        target: docker.io/nephio/porch-controllers:__NEPHIO_PORCH_IMAGE_TAG__
 
 - name: Pull replacement images
   become: true

@@ -22,23 +22,28 @@ nephio_stock_repos:
   - name: catalog-distros-sandbox
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /distros/sandbox
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
   - name: catalog-workloads-free5gc
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /workloads/free5gc
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
   - name: catalog-infra-capi
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /infra/capi
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
   - name: catalog-nephio-core
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /nephio/core
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
   - name: catalog-nephio-optional
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /nephio/optional
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
   - name: oai-core-packages
     repo: https://github.com/OPENAIRINTERFACE/oai-packages.git
     directory: /
@@ -46,11 +51,13 @@ nephio_stock_repos:
   - name: catalog-workloads-oai-ran
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /workloads/oai
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
   - name: catalog-workloads-tools
     repo: "{{ nephio_catalog_repo_uri }}"
     directory: /workloads/tools
-    branch: "{{ nephio_catalog_version }}"
+    # Runtime catalog browsing uses a Git branch, not the installer commit.
+    branch: main
 
 nephio:
   k8s:

@@ -10,7 +10,7 @@
 
 - name: Define working directory
   ansible.builtin.set_fact:
-    workdir: "{{ local_dest_directory | default('/tmp/kpt-pkg/' + pkg) }}"
+    workdir: "{{ '/tmp/nephio-' + nephio_catalog_version + (local_dest_directory | default('/tmp/kpt-pkg/' + pkg)) }}"
 
 - name: "Create base directory if it does not exist: {{ workdir }}"
   ansible.builtin.file:
@@ -43,6 +43,17 @@
   kpt:
     pkg_path: "{{ workdir }}"
     command: fn-render
+
+- name: Pin Porch deployment images and validate release package
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ playbook_dir }}/../pin-release.py"
+      - "{{ workdir }}"
+      - "{{ nephio_catalog_version }}"
+      - "{{ nephio_porch_image_tag }}"
+  register: release_pin
+  changed_when: "'updated' in release_pin.stdout"
 
 - name: Recursively restore ownership of a directory package
   ansible.builtin.file:
